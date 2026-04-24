@@ -302,6 +302,75 @@
     z-index: 11;
   }
 
+  /* ── BEFORE / AFTER SLIDER ── */
+  #ba-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.5), 0 0 12px rgba(0,0,0,0.4);
+    cursor: ew-resize;
+    z-index: 20;
+    display: none;
+    pointer-events: all;
+  }
+  #ba-handle::before, #ba-handle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+  }
+  #ba-knob {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: ew-resize;
+    user-select: none;
+  }
+  #ba-knob svg { color: #334155; }
+  #ba-label-before, #ba-label-after {
+    position: absolute;
+    top: 12px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 21;
+    display: none;
+  }
+  #ba-label-before { left: 10px; }
+  #ba-label-after  { right: 10px; }
+  #ba-overlay-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 15;
+    display: none;
+  }
+  .btn-ba-active {
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    background: rgba(99,102,241,0.12) !important;
+  }
+
   /* ── RESULTS PANEL ── */
   #results-area {
     padding: 1rem;
@@ -473,8 +542,16 @@
       </div>
       <div id="canvas-wrapper" style="display:none">
         <canvas id="main-canvas"></canvas>
+        <canvas id="ba-overlay-canvas"></canvas>
         <div id="masks-container"></div>
         <div id="mask-preview"></div>
+        <div id="ba-handle">
+          <div id="ba-knob">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="15 18 21 12 15 6"/><polyline points="9 6 3 12 9 18"/></svg>
+          </div>
+        </div>
+        <div id="ba-label-before">PŘED</div>
+        <div id="ba-label-after">PO</div>
       </div>
     </div>
 
@@ -485,6 +562,10 @@
       <button id="btn-zoom-in" class="btn-ghost btn-sm" style="padding:0.3rem 0.6rem;font-size:1rem;line-height:1">+</button>
       <button id="btn-zoom-100" class="btn-ghost btn-sm">1:1</button>
       <div style="flex:1"></div>
+      <button id="btn-before-after" class="btn-ghost btn-sm" style="display:none;gap:0.4rem" title="Přepínač Před / Po">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="9" height="18" rx="1"/><rect x="13" y="3" width="9" height="18" rx="1"/><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3 2"/></svg>
+        Před / Po
+      </button>
       <span id="coord-label" style="font-size:0.72rem;color:var(--text-muted);font-variant-numeric:tabular-nums"></span>
     </div>
 
@@ -516,6 +597,9 @@ const state = {
   drawingMask: false,
   maskStart: null,
   overlayCanvas: null,  // persists across zoom changes
+  baMode: false,        // before/after slider active
+  baPos: 0.5,           // 0..1 slider position (fraction of canvas width)
+  baDragging: false,
 };
 let nextId = 1;
 
@@ -676,14 +760,45 @@ function loadImage(src) {
 
 function redrawMain() {
   const W = state.image.naturalWidth, H = state.image.naturalHeight;
-  mainCanvas.width  = Math.round(W * state.zoom);
-  mainCanvas.height = Math.round(H * state.zoom);
+  const CW = Math.round(W * state.zoom);
+  const CH = Math.round(H * state.zoom);
+  mainCanvas.width  = CW;
+  mainCanvas.height = CH;
   ctx.save();
   ctx.scale(state.zoom, state.zoom);
   ctx.drawImage(state.image, 0, 0);
-  if (state.overlayCanvas) ctx.drawImage(state.overlayCanvas, 0, 0);
+  if (state.overlayCanvas && !state.baMode) ctx.drawImage(state.overlayCanvas, 0, 0);
   ctx.restore();
   zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
+
+  if (state.baMode && state.overlayCanvas) {
+    updateBAOverlay();
+  }
+}
+
+function updateBAOverlay() {
+  if (!state.overlayCanvas || !state.image) return;
+  const W = state.image.naturalWidth, H = state.image.naturalHeight;
+  const CW = Math.round(W * state.zoom);
+  const CH = Math.round(H * state.zoom);
+  const baCanvas = $('ba-overlay-canvas');
+  baCanvas.width  = CW;
+  baCanvas.height = CH;
+  const bc = baCanvas.getContext('2d');
+
+  const splitX = Math.round(state.baPos * CW);
+
+  // Right half: original image
+  bc.save();
+  bc.beginPath();
+  bc.rect(0, 0, splitX, CH);
+  bc.clip();
+  bc.scale(state.zoom, state.zoom);
+  bc.drawImage(state.overlayCanvas, 0, 0);
+  bc.restore();
+
+  // Handle position
+  $('ba-handle').style.left = splitX + 'px';
 }
 
 // ═══════════════════════════════════════════════
@@ -884,8 +999,10 @@ $('btn-zoom-100').addEventListener('click', () => applyZoom(1));
 $('btn-reset-view').addEventListener('click', () => { applyZoom(1); $('canvas-scroll').scrollTo(0,0); });
 $('btn-reset-canvas').addEventListener('click', () => {
   state.overlayCanvas = null;
+  if (state.baMode) deactivateBA();
   if (state.image) redrawMain();
   resultsArea.style.display = 'none';
+  $('btn-before-after').style.display = 'none';
   setStatus('Výsledky vymazány.', 'ok');
 });
 
@@ -1084,7 +1201,11 @@ function runAnalysis() {
   }
 
   state.overlayCanvas = ov;
+  if (state.baMode) deactivateBA();
   redrawMain();
+  // Show the before/after toggle button
+  const btnBA = $('btn-before-after');
+  btnBA.style.display = 'inline-flex';
 
   // ── Tally per category ──
   const tally = {};
@@ -1142,6 +1263,82 @@ function renderResults(results) {
     resultsGrid.appendChild(card);
   });
 }
+
+// ═══════════════════════════════════════════════
+// BEFORE / AFTER SLIDER
+// ═══════════════════════════════════════════════
+function activateBA() {
+  state.baMode = true;
+  state.baPos = 0.5;
+  $('btn-before-after').classList.add('btn-ba-active');
+  $('ba-handle').style.display = 'block';
+  $('ba-overlay-canvas').style.display = 'block';
+  $('ba-label-before').style.display = 'block';
+  $('ba-label-after').style.display = 'block';
+  // Hide mask overlays while in BA mode
+  masksContainer.style.display = 'none';
+  if (state.image) redrawMain();
+  setStatus('Přepínač Před/Po aktivní – táhněte dělicí čáru.', 'ok');
+}
+
+function deactivateBA() {
+  state.baMode = false;
+  state.baDragging = false;
+  $('btn-before-after').classList.remove('btn-ba-active');
+  $('ba-handle').style.display = 'none';
+  $('ba-overlay-canvas').style.display = 'none';
+  $('ba-overlay-canvas').width = 0;
+  $('ba-label-before').style.display = 'none';
+  $('ba-label-after').style.display = 'none';
+  masksContainer.style.display = '';
+  if (state.image) redrawMain();
+  setStatus('Přepínač Před/Po vypnut.', 'ok');
+}
+
+$('btn-before-after').addEventListener('click', () => {
+  if (!state.overlayCanvas) return;
+  state.baMode ? deactivateBA() : activateBA();
+});
+
+// ── Drag logic on the handle ──
+const baHandle = $('ba-handle');
+
+baHandle.addEventListener('mousedown', e => {
+  state.baDragging = true;
+  e.preventDefault();
+});
+
+document.addEventListener('mousemove', e => {
+  if (!state.baMode || !state.baDragging) return;
+  const rect = canvasWrap.getBoundingClientRect();
+  let x = e.clientX - rect.left;
+  x = Math.max(0, Math.min(x, mainCanvas.width));
+  state.baPos = x / mainCanvas.width;
+  updateBAOverlay();
+});
+
+document.addEventListener('mouseup', () => {
+  state.baDragging = false;
+});
+
+// Touch support
+baHandle.addEventListener('touchstart', e => {
+  state.baDragging = true;
+  e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchmove', e => {
+  if (!state.baMode || !state.baDragging) return;
+  const rect = canvasWrap.getBoundingClientRect();
+  let x = e.touches[0].clientX - rect.left;
+  x = Math.max(0, Math.min(x, mainCanvas.width));
+  state.baPos = x / mainCanvas.width;
+  updateBAOverlay();
+}, { passive: false });
+
+document.addEventListener('touchend', () => {
+  state.baDragging = false;
+});
 </script>
 </body>
 </html>
