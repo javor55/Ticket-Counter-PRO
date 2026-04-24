@@ -1,5 +1,7 @@
 # Ticket Counter PRO
 
+👉 [**Vyzkoušet aplikaci rovnou v prohlížeči (Live Demo)**](https://javor55.github.io/Ticket-Counter-PRO/ticket-counter-pro.html) 👈
+
 **Ticket Counter PRO** je klientská webová aplikace (Single Page Application bez nutnosti backendu) pro automatizované počítání volných a obsazených sedadel ze snímků hledišť, nákresů a online mapek sálových rezervací. Aplikace plně poběží ve vašem prohlížeči, čímž zajišťuje maximální rychlost a zachování soukromí (žádná data se nikam neodesílají).
 
 ---
