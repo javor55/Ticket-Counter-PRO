@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ticket Counter PRO</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #273549;
+    --border: #334155;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --text: #f1f5f9;
+    --text-muted: #94a3b8;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+    --radius: 10px;
+    --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    height: 58px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-shrink: 0;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-right: auto;
+  }
+  .logo svg { color: var(--accent); }
+  .logo span { color: var(--accent); }
+
+  button {
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.45rem 0.9rem;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { background: var(--surface2); color: var(--text); border-color: #4a5568; }
+  .btn-ghost.active { border-color: var(--warn); color: var(--warn); background: rgba(245,158,11,0.1); }
+  .btn-accent { background: var(--accent); color: #fff; }
+  .btn-accent:hover { background: var(--accent-hover); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.75rem; border-radius: 7px; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ── MAIN LAYOUT ── */
+  main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 320px;
+    min-width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  #sidebar-scroll {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  #sidebar-bottom {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 1rem;
+    flex-shrink: 0;
+  }
+
+  .panel {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── DROPZONE ── */
+  #dropzone {
+    margin: 1rem;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 1.8rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface2);
+  }
+  #dropzone:hover, #dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(99,102,241,0.08);
+  }
+  #dropzone svg { color: var(--accent); margin-bottom: 0.5rem; }
+  #dropzone p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
+  #dropzone strong { color: var(--text); display: block; font-size: 0.9rem; margin-bottom: 0.25rem; }
+  #file-input { display: none; }
+
+  /* ── CATEGORIES ── */
+  .cat-list { display: flex; flex-direction: column; gap: 0.65rem; }
+  .cat-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.65rem 0.75rem;
+  }
+  .cat-row1 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+  .cat-name {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.82rem;
+    font-family: inherit;
+  }
+  .cat-name:focus { outline: none; border-color: var(--accent); }
+  .cat-row2 { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+  .btn-color-picker {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    background: var(--surface2);
+    color: var(--text);
+    overflow: hidden;
+    transition: transform 0.1s, border-color 0.15s;
+  }
+  .btn-color-picker:hover {
+    border-color: var(--text-muted);
+  }
+  .btn-color-picker.active {
+    border-color: var(--warn);
+    box-shadow: 0 0 0 2px var(--warn);
+  }
+  .btn-color-picker .color-bg {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    opacity: 0.85;
+    z-index: 1;
+  }
+  .btn-color-picker span, .btn-color-picker svg {
+    position: relative;
+    z-index: 2;
+    color: var(--text);
+  }
+  .btn-color-picker.has-color span, .btn-color-picker.has-color svg {
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+
+  /* ── ZOOM BAR ── */
+  .zoom-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    flex-shrink: 0;
+  }
+  .zoom-bar span { font-size: 0.78rem; color: var(--text-muted); min-width: 38px; text-align: center; }
+
+  /* ── CANVAS AREA ── */
+  #canvas-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: #080d18;
+  }
+  #canvas-scroll {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 1.5rem;
+    min-height: 0;
+  }
+  #canvas-wrapper {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  #main-canvas {
+    display: block;
+    transform-origin: top left;
+  }
+  #canvas-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    min-height: 300px;
+    min-width: 400px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 3rem;
+    text-align: center;
+  }
+  #canvas-placeholder svg { color: var(--border); }
+
+  /* ── MAGNIFIER ── */
+  #magnifier {
+    position: fixed;
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    box-shadow: var(--shadow), 0 0 0 1px rgba(0,0,0,0.5);
+    pointer-events: none;
+    overflow: hidden;
+    display: none;
+    z-index: 9999;
+    background: #000;
+  }
+  #mag-canvas {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+
+  /* ── MASK overlay ── */
+  .mask-overlay {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(239, 68, 68, 0.4);
+    border: 2px dashed var(--danger);
+    z-index: 10;
+  }
+  #mask-preview {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(239, 68, 68, 0.2);
+    border: 2px dashed var(--danger);
+    display: none;
+    z-index: 11;
+  }
+
+  /* ── RESULTS PANEL ── */
+  #results-area {
+    padding: 1rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  #results-area .panel-title { margin-bottom: 0.75rem; }
+  .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.6rem; }
+  .result-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    border-left: 3px solid var(--accent);
+  }
+  .result-card-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-stat { font-size: 1.2rem; font-weight: 700; }
+  .result-detail { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; }
+  .progress-bar {
+    height: 5px; border-radius: 3px;
+    background: var(--border); margin-top: 0.5rem; overflow: hidden;
+  }
+  .progress-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.4s; }
+
+  /* ── STATUS BAR ── */
+  #status-bar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 0.35rem 1rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+  .status-dot.ok { background: var(--success); }
+  .status-dot.working { background: var(--warn); animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  input[type=range] { accent-color: var(--accent); width: 100%; }
+  input[type=text], input[type=number] { outline: none; }
+</style>
+</head>
+<body>
+
+<!-- MAGNIFIER (fixed overlay) -->
+<div id="magnifier"><canvas id="mag-canvas" width="160" height="160"></canvas></div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <rect x="2" y="7" width="20" height="14" rx="2"/>
+      <path d="M16 3v4M8 3v4M2 11h20"/>
+      <circle cx="7" cy="16" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="17" cy="16" r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+    Ticket Counter <span>PRO</span>
+  </div>
+</header>
+
+<main>
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside id="sidebar">
+    <div id="sidebar-scroll">
+
+    <!-- DROPZONE -->
+    <div id="dropzone">
+      <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.4" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <strong>Přetáhni obrázek sem</strong>
+      <p>nebo klikni pro výběr · Ctrl+V pro vložení ze schránky</p>
+    </div>
+    <input type="file" id="file-input" accept="image/*">
+
+    <!-- CATEGORIES -->
+    <div class="panel">
+      <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+        Kategorie sedadel
+        <div style="display:flex; gap:0.3rem;">
+          <button class="btn-ghost btn-sm" id="btn-save-tpl" title="Uložit šablonu" style="padding:0.2rem 0.4rem;">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          </button>
+          <button class="btn-ghost btn-sm" id="btn-load-tpl" title="Načíst šablonu" style="padding:0.2rem 0.4rem;">
+             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="cat-list" id="cat-list"></div>
+      <button class="btn-ghost btn-sm" id="btn-add-cat" style="margin-top:0.7rem;width:100%;justify-content:center">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Přidat kategorii
+      </button>
+    </div>
+
+    <!-- ANALYSIS SETTINGS -->
+    <div class="panel">
+      <div class="panel-title">Nastavení analýzy</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">
+        <label style="font-size:0.78rem;color:var(--text-muted);flex:1">Tolerance barvy</label>
+        <span id="tol-val" style="font-size:0.78rem;font-weight:700;min-width:28px;text-align:right">40</span>
+      </div>
+      <input type="range" id="tolerance" min="5" max="120" value="40">
+    </div>
+
+    </div> <!-- end #sidebar-scroll -->
+
+    <!-- TOOLS -->
+    <div id="sidebar-bottom">
+      <div class="panel-title">Nástroje</div>
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+        <button class="btn-ghost btn-sm" id="btn-mask">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="1"/>
+            <line x1="3" y1="3" x2="21" y2="21"/>
+            <line x1="21" y1="3" x2="3" y2="21"/>
+          </svg>
+          Přidat masku
+        </button>
+        <button class="btn-ghost btn-sm" id="btn-clear-masks">Smazat masky</button>
+      </div>
+      <div style="margin-top:0.5rem">
+        <button class="btn-success" id="btn-count" style="width:100%;justify-content:center" disabled>
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Spočítat sedadla
+        </button>
+      </div>
+      <div style="margin-top:0.4rem;display:flex;gap:0.4rem">
+        <button class="btn-ghost btn-sm" id="btn-reset-view" style="flex:1;justify-content:center">Reset pohledu</button>
+        <button class="btn-ghost btn-sm" id="btn-reset-canvas" style="flex:1;justify-content:center">Reset výsledků</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ CANVAS AREA ═══ -->
+  <div id="canvas-area">
+    <div id="canvas-scroll">
+      <div id="canvas-placeholder">
+        <svg width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.2" viewBox="0 0 24 24">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <div>Sem bude zobrazen obrázek<br><small style="font-size:0.78rem">Vložte soubor přes panel vlevo</small></div>
+      </div>
+      <div id="canvas-wrapper" style="display:none">
+        <canvas id="main-canvas"></canvas>
+        <div id="masks-container"></div>
+        <div id="mask-preview"></div>
+      </div>
+    </div>
+
+    <!-- ZOOM BAR -->
+    <div class="zoom-bar">
+      <button id="btn-zoom-out" class="btn-ghost btn-sm" style="padding:0.3rem 0.6rem;font-size:1rem;line-height:1">−</button>
+      <span id="zoom-label">100%</span>
+      <button id="btn-zoom-in" class="btn-ghost btn-sm" style="padding:0.3rem 0.6rem;font-size:1rem;line-height:1">+</button>
+      <button id="btn-zoom-100" class="btn-ghost btn-sm">1:1</button>
+      <div style="flex:1"></div>
+      <span id="coord-label" style="font-size:0.72rem;color:var(--text-muted);font-variant-numeric:tabular-nums"></span>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="results-area" style="display:none">
+      <div class="panel-title">Výsledky analýzy</div>
+      <div class="results-grid" id="results-grid"></div>
+    </div>
+  </div>
+</main>
+
+<div id="status-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-text">Připraveno. Vložte obrázek přetažením, kliknutím nebo Ctrl+V.</span>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const state = {
+  image: null,
+  categories: [],
+  activePicker: null,   // {catId, slot}
+  masks: [],            // array of {x,y,w,h} in image-natural coords
+  zoom: 1,
+  drawingMask: false,
+  maskStart: null,
+  overlayCanvas: null,  // persists across zoom changes
+};
+let nextId = 1;
+
+// offscreen canvas at natural image resolution
+let offCanvas = null, offCtx = null;
+
+// ═══════════════════════════════════════════════
+// DOM
+// ═══════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const mainCanvas   = $('main-canvas');
+const ctx          = mainCanvas.getContext('2d', { willReadFrequently: true });
+const magCanvas    = $('mag-canvas');
+const magCtx       = magCanvas.getContext('2d');
+const magnifier    = $('magnifier');
+const masksContainer = $('masks-container');
+const maskPreviewEl  = $('mask-preview');
+const catListEl    = $('cat-list');
+const resultsArea  = $('results-area');
+const resultsGrid  = $('results-grid');
+const statusDot    = $('status-dot');
+const statusText   = $('status-text');
+const zoomLabel    = $('zoom-label');
+const coordLabel   = $('coord-label');
+const tolInput     = $('tolerance');
+const tolVal       = $('tol-val');
+const btnCount     = $('btn-count');
+const canvasWrap   = $('canvas-wrapper');
+const placeholder  = $('canvas-placeholder');
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+function setStatus(msg, type = '') {
+  statusText.textContent = msg;
+  statusDot.className = 'status-dot' + (type === 'ok' ? ' ok' : type === 'working' ? ' working' : '');
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function rgbStr(c) { return c ? `rgb(${c[0]},${c[1]},${c[2]})` : '#555'; }
+
+function colorDist(a, b) {
+  return Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2);
+}
+
+// ═══════════════════════════════════════════════
+// CATEGORIES
+// ═══════════════════════════════════════════════
+function addCategory(name, freeColor, occupiedColor) {
+  state.categories.push({ id: nextId++, name: name || `Kategorie ${nextId-1}`, freeColor: freeColor || null, occupiedColor: occupiedColor || null });
+  renderCategories();
+}
+
+function removeCat(id) {
+  state.categories = state.categories.filter(c => c.id !== id);
+  if (state.activePicker?.catId === id) state.activePicker = null;
+  renderCategories();
+}
+
+function renderCategories() {
+  catListEl.innerHTML = '';
+  for (const cat of state.categories) {
+    const isPickingFree = state.activePicker?.catId === cat.id && state.activePicker?.slot === 'free';
+    const isPickingOcc  = state.activePicker?.catId === cat.id && state.activePicker?.slot === 'occupied';
+
+    const el = document.createElement('div');
+    el.className = 'cat-item';
+    el.dataset.cid = cat.id;
+    el.innerHTML = `
+      <div class="cat-row1">
+        <input class="cat-name" type="text" value="${esc(cat.name)}" placeholder="Název / Cena">
+        <button class="btn-danger btn-sm btn-del-cat" data-id="${cat.id}" title="Smazat kategorii">✕</button>
+      </div>
+      <div class="cat-row2">
+        <button class="btn-color-picker ${cat.freeColor ? 'has-color' : ''} ${isPickingFree ? 'active' : ''}" data-id="${cat.id}" data-slot="free" title="Vybrat barvu volného sedadla">
+          <div class="color-bg" style="background:${cat.freeColor ? rgbStr(cat.freeColor) : 'transparent'}"></div>
+          <span style="flex:1;text-align:left;font-weight:600;">Volné</span>
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z"/></svg>
+        </button>
+        <button class="btn-color-picker ${cat.occupiedColor ? 'has-color' : ''} ${isPickingOcc ? 'active' : ''}" data-id="${cat.id}" data-slot="occupied" title="Vybrat barvu obsazeného sedadla">
+          <div class="color-bg" style="background:${cat.occupiedColor ? rgbStr(cat.occupiedColor) : 'transparent'}"></div>
+          <span style="flex:1;text-align:left;font-weight:600;">Obsazené</span>
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z"/></svg>
+        </button>
+      </div>`;
+    catListEl.appendChild(el);
+  }
+
+  catListEl.querySelectorAll('.cat-name').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const id = +inp.closest('[data-cid]').dataset.cid;
+      const cat = state.categories.find(c => c.id === id);
+      if (cat) cat.name = inp.value;
+    });
+  });
+  catListEl.querySelectorAll('.btn-del-cat').forEach(btn => {
+    btn.addEventListener('click', () => removeCat(+btn.dataset.id));
+  });
+  catListEl.querySelectorAll('.btn-color-picker').forEach(btn => {
+    btn.addEventListener('click', () => togglePicker(+btn.dataset.id, btn.dataset.slot));
+  });
+}
+
+function togglePicker(catId, slot) {
+  if (state.activePicker?.catId === catId && state.activePicker?.slot === slot) {
+    state.activePicker = null;
+    mainCanvas.style.cursor = state.drawingMask ? 'crosshair' : 'default';
+    setStatus('Kapátko zrušeno.', '');
+  } else {
+    if (!state.image) { setStatus('Nejprve načtěte obrázek.', ''); return; }
+    state.activePicker = { catId, slot };
+    state.drawingMask = false;
+    $('btn-mask').classList.remove('active');
+    mainCanvas.style.cursor = 'crosshair';
+    const cat = state.categories.find(c => c.id === catId);
+    setStatus(`Kapátko aktivní – klikněte na barvu "${slot === 'free' ? 'Volného' : 'Obsazeného'}" sedadla (kat. ${cat?.name})`, 'working');
+  }
+  renderCategories();
+}
+
+$('btn-add-cat').addEventListener('click', () => addCategory());
+
+// default categories
+addCategory('Kategorie A', null, null);
+addCategory('Kategorie B', null, null);
+
+// ═══════════════════════════════════════════════
+// IMAGE LOADING
+// ═══════════════════════════════════════════════
+function loadImage(src) {
+  const img = new Image();
+  img.onload = () => {
+    state.image = img;
+    offCanvas = document.createElement('canvas');
+    offCanvas.width  = img.naturalWidth;
+    offCanvas.height = img.naturalHeight;
+    offCtx = offCanvas.getContext('2d', { willReadFrequently: true });
+    offCtx.drawImage(img, 0, 0);
+
+    placeholder.style.display = 'none';
+    canvasWrap.style.display  = 'inline-block';
+    state.overlayCanvas = null;
+    state.zoom = Math.min(1, (window.innerWidth - 360) / img.naturalWidth, (window.innerHeight - 180) / img.naturalHeight);
+    state.zoom = Math.max(0.1, +(state.zoom).toFixed(2));
+    state.masks = [];
+    renderMasks();
+    redrawMain();
+    setStatus(`Obrázek načten: ${img.naturalWidth} × ${img.naturalHeight} px`, 'ok');
+    btnCount.disabled = false;
+    resultsArea.style.display = 'none';
+  };
+  img.onerror = () => setStatus('Chyba: soubor nelze načíst jako obrázek.', '');
+  img.src = src;
+}
+
+function redrawMain() {
+  const W = state.image.naturalWidth, H = state.image.naturalHeight;
+  mainCanvas.width  = Math.round(W * state.zoom);
+  mainCanvas.height = Math.round(H * state.zoom);
+  ctx.save();
+  ctx.scale(state.zoom, state.zoom);
+  ctx.drawImage(state.image, 0, 0);
+  if (state.overlayCanvas) ctx.drawImage(state.overlayCanvas, 0, 0);
+  ctx.restore();
+  zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
+}
+
+// ═══════════════════════════════════════════════
+// DROP / PASTE / FILE
+// ═══════════════════════════════════════════════
+const dropzone = $('dropzone');
+const fileInput = $('file-input');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f?.type.startsWith('image/')) loadImage(URL.createObjectURL(f));
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadImage(URL.createObjectURL(fileInput.files[0])); });
+document.addEventListener('paste', e => {
+  const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+  if (item) loadImage(URL.createObjectURL(item.getAsFile()));
+});
+
+// ═══════════════════════════════════════════════
+// CANVAS MOUSE (picker + sector)
+// ═══════════════════════════════════════════════
+function imgPos(e) {
+  const r = mainCanvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / state.zoom, y: (e.clientY - r.top) / state.zoom };
+}
+
+mainCanvas.addEventListener('mousemove', e => {
+  if (!state.image) return;
+  const p = imgPos(e);
+  coordLabel.textContent = `x:${Math.round(p.x)} y:${Math.round(p.y)}`;
+
+  if (state.activePicker) {
+    showMagnifier(e, p);
+  } else {
+    magnifier.style.display = 'none';
+  }
+
+  if (state.drawingMask && state.maskStart) {
+    updateMaskPreview(p);
+  }
+});
+
+mainCanvas.addEventListener('mouseleave', () => {
+  magnifier.style.display = 'none';
+  coordLabel.textContent = '';
+});
+
+mainCanvas.addEventListener('mousedown', e => {
+  if (!state.image) return;
+  if (state.drawingMask) {
+    state.maskStart = imgPos(e);
+    maskPreviewEl.style.display = 'none';
+  }
+});
+
+mainCanvas.addEventListener('mouseup', e => {
+  if (!state.image) return;
+  if (state.drawingMask && state.maskStart) {
+    const p = imgPos(e);
+    const s = state.maskStart;
+    const x = Math.round(Math.min(s.x, p.x)), y = Math.round(Math.min(s.y, p.y));
+    const w = Math.round(Math.abs(p.x - s.x)), h = Math.round(Math.abs(p.y - s.y));
+    if (w > 5 && h > 5) {
+      state.masks.push({ x, y, w, h });
+      setStatus(`Maska přidána: ${w}×${h}px`, 'ok');
+    }
+    state.maskStart = null;
+    maskPreviewEl.style.display = 'none';
+    renderMasks();
+  }
+});
+
+mainCanvas.addEventListener('click', e => {
+  if (!state.image || !state.activePicker) return;
+  pickColor(imgPos(e));
+});
+
+// ═══════════════════════════════════════════════
+// MAGNIFIER
+// ═══════════════════════════════════════════════
+function showMagnifier(mouseEvent, imgP) {
+  magnifier.style.display = 'block';
+  const MAG = 160, HALF_SRC = 16;
+  // Offset position so it doesn't overlap cursor
+  let mx = mouseEvent.clientX + 72, my = mouseEvent.clientY - 120;
+  if (mx + MAG > window.innerWidth)  mx = mouseEvent.clientX - 72 - MAG;
+  if (my < 4) my = mouseEvent.clientY + 24;
+  magnifier.style.left = mx + 'px';
+  magnifier.style.top  = my + 'px';
+
+  magCtx.clearRect(0, 0, MAG, MAG);
+  magCtx.imageSmoothingEnabled = false;
+
+  // Sample from the natural-res offscreen canvas
+  const sx = Math.round(imgP.x) - HALF_SRC;
+  const sy = Math.round(imgP.y) - HALF_SRC;
+  magCtx.drawImage(offCanvas, sx, sy, HALF_SRC * 2, HALF_SRC * 2, 0, 0, MAG, MAG);
+
+  // Crosshair - More prominent
+  magCtx.strokeStyle = '#000';
+  magCtx.lineWidth = 3;
+  magCtx.beginPath();
+  magCtx.moveTo(MAG/2 - 12, MAG/2); magCtx.lineTo(MAG/2 + 12, MAG/2);
+  magCtx.moveTo(MAG/2, MAG/2 - 12); magCtx.lineTo(MAG/2, MAG/2 + 12);
+  magCtx.stroke();
+  
+  magCtx.strokeStyle = '#fff';
+  magCtx.lineWidth = 1;
+  magCtx.stroke();
+}
+
+// ═══════════════════════════════════════════════
+// COLOR PICK
+// ═══════════════════════════════════════════════
+function pickColor(p) {
+  if (!offCtx) return;
+  const x = Math.max(0, Math.min(Math.round(p.x), offCanvas.width  - 1));
+  const y = Math.max(0, Math.min(Math.round(p.y), offCanvas.height - 1));
+  const px = offCtx.getImageData(x, y, 1, 1).data;
+  const color = [px[0], px[1], px[2]];
+
+  const cat = state.categories.find(c => c.id === state.activePicker.catId);
+  if (!cat) return;
+  if (state.activePicker.slot === 'free') cat.freeColor = color;
+  else cat.occupiedColor = color;
+
+  setStatus(`Barva zachycena rgb(${color.join(',')}) → "${cat.name}" [${state.activePicker.slot === 'free' ? 'Volné' : 'Obsazené'}]`, 'ok');
+  state.activePicker = null;
+  mainCanvas.style.cursor = 'default';
+  magnifier.style.display = 'none';
+  renderCategories();
+}
+
+// ═══════════════════════════════════════════════
+// MASKS
+// ═══════════════════════════════════════════════
+function updateMaskPreview(p) {
+  const s = state.maskStart;
+  if (!s) return;
+  const x = Math.min(s.x, p.x) * state.zoom;
+  const y = Math.min(s.y, p.y) * state.zoom;
+  const w = Math.abs(p.x - s.x) * state.zoom;
+  const h = Math.abs(p.y - s.y) * state.zoom;
+  maskPreviewEl.style.cssText = `display:block;left:${x}px;top:${y}px;width:${w}px;height:${h}px`;
+}
+
+function renderMasks() {
+  masksContainer.innerHTML = '';
+  for (const m of state.masks) {
+    const el = document.createElement('div');
+    el.className = 'mask-overlay';
+    el.style.left = (m.x * state.zoom) + 'px';
+    el.style.top = (m.y * state.zoom) + 'px';
+    el.style.width = (m.w * state.zoom) + 'px';
+    el.style.height = (m.h * state.zoom) + 'px';
+    masksContainer.appendChild(el);
+  }
+}
+
+$('btn-mask').addEventListener('click', () => {
+  if (!state.image) { setStatus('Nejprve načtěte obrázek.', ''); return; }
+  state.drawingMask = !state.drawingMask;
+  $('btn-mask').classList.toggle('active', state.drawingMask);
+  mainCanvas.style.cursor = state.drawingMask ? 'crosshair' : 'default';
+  if (state.drawingMask) {
+     setStatus('Táhněte myší pro nakreslení ignorované oblasti…', 'working');
+     if (state.activePicker) {
+         state.activePicker = null;
+         renderCategories();
+     }
+  } else {
+     setStatus('Přidávání masek ukončeno.', 'ok');
+  }
+});
+
+$('btn-clear-masks').addEventListener('click', () => {
+  state.masks = [];
+  renderMasks();
+  setStatus('Masky smazány.', 'ok');
+});
+
+// ═══════════════════════════════════════════════
+// ZOOM
+// ═══════════════════════════════════════════════
+function applyZoom(z) {
+  state.zoom = Math.min(8, Math.max(0.05, +z.toFixed(2)));
+  if (state.image) redrawMain();
+  else zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
+  renderMasks();
+}
+$('btn-zoom-in') .addEventListener('click', () => applyZoom(state.zoom + 0.25));
+$('btn-zoom-out').addEventListener('click', () => applyZoom(state.zoom - 0.25));
+$('btn-zoom-100').addEventListener('click', () => applyZoom(1));
+$('btn-reset-view').addEventListener('click', () => { applyZoom(1); $('canvas-scroll').scrollTo(0,0); });
+$('btn-reset-canvas').addEventListener('click', () => {
+  state.overlayCanvas = null;
+  if (state.image) redrawMain();
+  resultsArea.style.display = 'none';
+  setStatus('Výsledky vymazány.', 'ok');
+});
+
+$('canvas-scroll').addEventListener('wheel', e => {
+  if (!state.image) return;
+  e.preventDefault();
+  applyZoom(state.zoom + (e.deltaY < 0 ? 0.1 : -0.1));
+}, { passive: false });
+
+// ═══════════════════════════════════════════════
+// TOLERANCE
+// ═══════════════════════════════════════════════
+tolInput.addEventListener('input', () => { tolVal.textContent = tolInput.value; });
+
+// ═══════════════════════════════════════════════
+// TEMPLATE
+// ═══════════════════════════════════════════════
+$('btn-save-tpl').addEventListener('click', () => {
+  const tpl = state.categories.map(c => ({ name: c.name, freeColor: c.freeColor, occupiedColor: c.occupiedColor }));
+  localStorage.setItem('tcp_v2', JSON.stringify(tpl));
+  setStatus('Šablona uložena do localStorage.', 'ok');
+});
+
+$('btn-load-tpl').addEventListener('click', () => {
+  const raw = localStorage.getItem('tcp_v2');
+  if (!raw) { setStatus('Žádná šablona nebyla nalezena.', ''); return; }
+  try {
+    const tpl = JSON.parse(raw);
+    state.categories = []; nextId = 1;
+    tpl.forEach(c => addCategory(c.name, c.freeColor, c.occupiedColor));
+    setStatus(`Šablona načtena: ${tpl.length} kategorií.`, 'ok');
+  } catch { setStatus('Šablona je poškozena.', ''); }
+});
+
+// ═══════════════════════════════════════════════
+// ══════════  CORE ALGORITHM  ═══════════════════
+// ═══════════════════════════════════════════════
+$('btn-count').addEventListener('click', async () => {
+  if (!state.image) return;
+  setStatus('Spouštím analýzu…', 'working');
+  btnCount.disabled = true;
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const res = runAnalysis();
+    renderResults(res);
+    setStatus(`Analýza dokončena. Nalezeno ${res.reduce((s,r)=>s+r.free+r.occupied,0)} sedadel.`, 'ok');
+  } catch (err) {
+    setStatus('Chyba: ' + err.message, '');
+    console.error(err);
+  }
+  btnCount.disabled = false;
+});
+
+function runAnalysis() {
+  const W = offCanvas.width, H = offCanvas.height;
+  const TOL = +tolInput.value;
+  const masks = state.masks;
+
+  // ── Collect all color targets ──
+  const targets = [];
+  for (const cat of state.categories) {
+    if (cat.freeColor)     targets.push({ catId: cat.id, slot: 'free',     color: cat.freeColor });
+    if (cat.occupiedColor) targets.push({ catId: cat.id, slot: 'occupied', color: cat.occupiedColor });
+  }
+  if (!targets.length) throw new Error('Přiřaďte alespoň jednu barvu kategoriím pomocí kapátka.');
+
+  const imgData = offCtx.getImageData(0, 0, W, H).data;
+
+  // ─────────────────────────────────────────────────────────
+  // FÁZE 1: Barevná filtrace
+  // Každý pixel porovnáme s uloženými barvami; ignorujeme bílé
+  // pozadí a velmi tmavý text.
+  // ─────────────────────────────────────────────────────────
+  const tmap = new Uint16Array(W * H); // 0=no match, else targetIndex+1
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let inMask = false;
+      for (let m = 0; m < masks.length; m++) {
+        if (x >= masks[m].x && x <= masks[m].x + masks[m].w && y >= masks[m].y && y <= masks[m].y + masks[m].h) {
+          inMask = true; break;
+        }
+      }
+      if (inMask) continue;
+
+      const i4 = (y * W + x) << 2;
+      const r = imgData[i4], g = imgData[i4+1], b = imgData[i4+2];
+
+      if (r > 253 && g > 253 && b > 253) continue; // bílé pozadí
+      if (r < 50  && g < 50  && b < 50)  continue; // tmavý text
+
+      let best = Infinity, bestT = -1;
+      for (let t = 0; t < targets.length; t++) {
+        const d = colorDist([r, g, b], targets[t].color);
+        if (d < TOL && d < best) { best = d; bestT = t; }
+      }
+      if (bestT >= 0) tmap[y * W + x] = bestT + 1;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // FÁZE 2: Connected-Component Labeling pomocí BFS
+  // Skok až 2 px spojuje oblasti přerušené textem uvnitř sedadla.
+  // ─────────────────────────────────────────────────────────
+  const visited = new Uint8Array(W * H);
+  const rawClusters = [];
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = y * W + x;
+      if (!tmap[idx] || visited[idx]) continue;
+
+      const tIdx = tmap[idx] - 1;
+      const queue = [idx];
+      visited[idx] = 1;
+      let qi = 0, area = 0, sumX = 0, sumY = 0;
+
+      while (qi < queue.length) {
+        const cur = queue[qi++];
+        area++;
+        const cx = cur % W, cy = (cur - cx) / W;
+        sumX += cx; sumY += cy;
+
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (!dx && !dy) continue;
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+            const ni = ny * W + nx;
+            if (visited[ni] || tmap[ni] !== tIdx + 1) continue;
+            visited[ni] = 1;
+            queue.push(ni);
+          }
+        }
+      }
+
+      if (area >= 5) {
+        rawClusters.push({ tIdx, area, cx: sumX / area, cy: sumY / area });
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // FÁZE 3: Mediánová plocha a čištění šumu (Auto-scaling)
+  // ─────────────────────────────────────────────────────────
+  const bigAreas = rawClusters.filter(c => c.area > 15).map(c => c.area).sort((a, b) => a - b);
+  if (!bigAreas.length) throw new Error('Nebyla nalezena žádná sedadla. Zkontrolujte barvy a toleranci.');
+
+  const medArea   = bigAreas[Math.floor(bigAreas.length / 2)];
+  const unifiedR  = Math.sqrt(medArea / Math.PI);
+  const minArea   = medArea * 0.3;
+
+  const cleaned = rawClusters.filter(c => c.area >= minArea);
+
+  // ─────────────────────────────────────────────────────────
+  // FÁZE 4: Non-Maximum Suppression – odstranění duplicit
+  // Seřadíme od největšího; přidáme jen tehdy, není-li těžiště
+  // blíže než 1.5 × poloměr od již potvrzeného sedadla.
+  // ─────────────────────────────────────────────────────────
+  cleaned.sort((a, b) => b.area - a.area);
+  const final = [];
+  const minD = 1.5 * unifiedR;
+
+  for (const c of cleaned) {
+    let dup = false;
+    for (const f of final) {
+      const dx = c.cx - f.cx, dy = c.cy - f.cy;
+      if (dx*dx + dy*dy < minD * minD) { dup = true; break; }
+    }
+    if (!dup) final.push(c);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // FÁZE 5: Čisté vykreslení
+  // Obrázek ztlumíme bílým filtrem, pak nakreslíme kruhy.
+  // ─────────────────────────────────────────────────────────
+  const ov = document.createElement('canvas');
+  ov.width = W; ov.height = H;
+  const oc = ov.getContext('2d');
+
+  oc.fillStyle = 'rgba(255,255,255,0.55)';
+  oc.fillRect(0, 0, W, H);
+
+  const drawR = Math.max(3, unifiedR * 0.9);
+
+  for (const seat of final) {
+    const t = targets[seat.tIdx];
+    const [r, g, b] = t.color;
+    oc.beginPath();
+    oc.arc(seat.cx, seat.cy, drawR, 0, 6.283185);
+    oc.fillStyle   = `rgba(${r},${g},${b},0.88)`;
+    oc.fill();
+    oc.strokeStyle = 'rgba(0,0,0,0.5)';
+    oc.lineWidth   = Math.max(1, drawR * 0.12);
+    oc.stroke();
+  }
+
+  state.overlayCanvas = ov;
+  redrawMain();
+
+  // ── Tally per category ──
+  const tally = {};
+  for (const cat of state.categories) tally[cat.id] = { free: 0, occupied: 0 };
+  for (const seat of final) {
+    const t = targets[seat.tIdx];
+    if (tally[t.catId]) tally[t.catId][t.slot]++;
+  }
+
+  return state.categories.map(cat => ({
+    id: cat.id,
+    name: cat.name,
+    free: tally[cat.id]?.free || 0,
+    occupied: tally[cat.id]?.occupied || 0,
+    color: cat.freeColor || cat.occupiedColor,
+  }));
+}
+
+// ═══════════════════════════════════════════════
+// RESULTS
+// ═══════════════════════════════════════════════
+function renderResults(results) {
+  resultsArea.style.display = 'block';
+  resultsGrid.innerHTML = '';
+
+  let tf = 0, to = 0;
+  results.forEach(r => { tf += r.free; to += r.occupied; });
+
+  // Summary first
+  const tt = tf + to;
+  const tp = tt ? Math.round(to / tt * 100) : 0;
+  const sum = document.createElement('div');
+  sum.className = 'result-card total';
+  sum.innerHTML = `
+    <div class="result-card-title">Celkový souhrn</div>
+    <div class="result-stat">${tt} sedadel</div>
+    <div class="result-detail">🟢 Volná: <b>${tf}</b> &nbsp;·&nbsp; 🔴 Obsazená: <b>${to}</b></div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${tp}%"></div></div>
+    <div class="result-detail" style="text-align:right;margin-top:0.2rem">${tp}% obsazeno</div>`;
+  resultsGrid.appendChild(sum);
+
+  results.forEach(r => {
+    const tot = r.free + r.occupied;
+    const pct = tot ? Math.round(r.occupied / tot * 100) : 0;
+    const col = r.color ? rgbStr(r.color) : 'var(--accent)';
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.style.borderLeftColor = col;
+    card.innerHTML = `
+      <div class="result-card-title" title="${esc(r.name)}">${esc(r.name)}</div>
+      <div class="result-stat" style="color:${col}">${tot}</div>
+      <div class="result-detail">🟢 <b>${r.free}</b> &nbsp;·&nbsp; 🔴 <b>${r.occupied}</b></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="result-detail" style="text-align:right;margin-top:0.2rem">${pct}% obsazeno</div>`;
+    resultsGrid.appendChild(card);
+  });
+}
+</script>
+</body>
+</html>
