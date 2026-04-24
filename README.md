@@ -31,10 +31,10 @@ Aplikace se zkládá z pouhého jediného `HTML` plně se samonosným `CSS` i `J
 2. Otevřete `ticket-counter-pro.html` v libovolném moderním webovém prohlížeči (podpora pro Google Chrome, Mozilla Firefox, Edge, Safari).
 3. *Nepotřebujete Node.js, Python server ani žádný jiný lokální dev-server.*
 
-## 🎬 Ukázka práce
+## 🎬 Ukázka
 
 ![Ukázka práce po analýze](./screenshoty/screenshot-result.png)
-*(Zde vložte screenshot aplikace po dokončení analýzy obarvených zón)*
+
 
 ## 🕹️ Návod na použití
 
