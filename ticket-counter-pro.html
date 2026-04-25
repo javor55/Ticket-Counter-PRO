@@ -431,6 +431,51 @@
   ::-webkit-scrollbar-thumb:hover { background: #475569; }
   input[type=range] { accent-color: var(--accent); width: 100%; }
   input[type=text], input[type=number] { outline: none; }
+
+  /* ── DETECTION PALETTE ── */
+  .det-palette {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem 0.6rem;
+    margin-bottom: 0.7rem;
+  }
+  .det-swatch-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+  }
+  .det-swatch {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255,255,255,0.1);
+    transition: transform 0.1s, box-shadow 0.12s;
+  }
+  .det-swatch-wrap:hover .det-swatch { transform: scale(1.12); }
+  .det-swatch-wrap.selected .det-swatch {
+    box-shadow: 0 0 0 3px var(--accent);
+    border-color: transparent;
+  }
+  .det-pct {
+    font-size: 0.59rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .assign-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--border);
+    flex-wrap: nowrap;
+  }
+  .assign-preview {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -486,6 +531,24 @@
       <button class="btn-ghost btn-sm" id="btn-add-cat" style="margin-top:0.7rem;width:100%;justify-content:center">
         <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Přidat kategorii
+      </button>
+      <button class="btn-ghost btn-sm" id="btn-detect" style="margin-top:0.4rem;width:100%;justify-content:center" disabled>
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M8 11h6M11 8v6"/></svg>
+        Detekovat barvy automaticky
+      </button>
+    </div>
+
+    <!-- DETECTION PANEL -->
+    <div id="detection-panel" class="panel" style="display:none">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+        <span>Detekované barvy</span>
+        <button class="btn-ghost btn-sm" id="btn-det-close" style="padding:0.15rem 0.4rem">✕</button>
+      </div>
+      <p id="det-hint" style="font-size:0.71rem;color:var(--text-muted);margin-bottom:0.65rem;line-height:1.4"></p>
+      <div class="det-palette" id="det-palette"></div>
+      <button class="btn-accent btn-sm" id="btn-det-apply" style="width:100%;justify-content:center;margin-top:0.3rem;display:none">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Přiřadit do kategorií
       </button>
     </div>
 
@@ -708,19 +771,11 @@ function renderCategories() {
 
 function togglePicker(catId, slot) {
   if (state.activePicker?.catId === catId && state.activePicker?.slot === slot) {
-    state.activePicker = null;
-    mainCanvas.style.cursor = state.drawingMask ? 'crosshair' : 'default';
+    deactivateGlobalPicker();
     setStatus('Kapátko zrušeno.', '');
-  } else {
-    if (!state.image) { setStatus('Nejprve načtěte obrázek.', ''); return; }
-    state.activePicker = { catId, slot };
-    state.drawingMask = false;
-    $('btn-mask').classList.remove('active');
-    mainCanvas.style.cursor = 'crosshair';
-    const cat = state.categories.find(c => c.id === catId);
-    setStatus(`Kapátko aktivní – klikněte na barvu "${slot === 'free' ? 'Volného' : 'Obsazeného'}" sedadla (kat. ${cat?.name})`, 'working');
+    return;
   }
-  renderCategories();
+  activateGlobalPicker(catId, slot);
 }
 
 $('btn-add-cat').addEventListener('click', () => addCategory());
@@ -752,7 +807,12 @@ function loadImage(src) {
     redrawMain();
     setStatus(`Obrázek načten: ${img.naturalWidth} × ${img.naturalHeight} px`, 'ok');
     btnCount.disabled = false;
+    $('btn-detect').disabled = false;
     resultsArea.style.display = 'none';
+    // Hide previous detection panel when a new image is loaded
+    $('detection-panel').style.display = 'none';
+    $('det-palette').innerHTML = '';
+    detectedSeatColors = [];
   };
   img.onerror = () => setStatus('Chyba: soubor nelze načíst jako obrázek.', '');
   img.src = src;
@@ -834,9 +894,9 @@ mainCanvas.addEventListener('mousemove', e => {
   const p = imgPos(e);
   coordLabel.textContent = `x:${Math.round(p.x)} y:${Math.round(p.y)}`;
 
-  if (state.activePicker) {
-    showMagnifier(e, p);
-  } else {
+  if (state.activePicker && !pickerHandlers) {
+    showMagnifier(e, p);   // canvas-only fallback (non-Chromium browsers)
+  } else if (!state.activePicker) {
     magnifier.style.display = 'none';
   }
 
@@ -876,8 +936,8 @@ mainCanvas.addEventListener('mouseup', e => {
 });
 
 mainCanvas.addEventListener('click', e => {
-  if (!state.image || !state.activePicker) return;
-  pickColor(imgPos(e));
+  if (!state.image || !state.activePicker || pickerHandlers) return;
+  pickColor(imgPos(e));  // canvas-only fallback path
 });
 
 // ═══════════════════════════════════════════════
@@ -912,6 +972,141 @@ function showMagnifier(mouseEvent, imgP) {
   magCtx.strokeStyle = '#fff';
   magCtx.lineWidth = 1;
   magCtx.stroke();
+}
+
+// ─── Global picker: lupa fungující kdekoliv na stránce ───────────────────────
+
+function posMagnifier(e) {
+  const MAG = 160;
+  let mx = e.clientX + 80, my = e.clientY - 130;
+  if (mx + MAG > window.innerWidth)  mx = e.clientX - 80 - MAG;
+  if (my < 4) my = e.clientY + 24;
+  magnifier.style.left = mx + 'px';
+  magnifier.style.top  = my + 'px';
+  magnifier.style.display = 'block';
+}
+
+// Čte barvu pod kurzorem: z canvasu nebo z CSS pozadí DOM elementu
+function getColorUnderCursor(e) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  if (!el) return null;
+
+  if (el === mainCanvas) {
+    const rect = mainCanvas.getBoundingClientRect();
+    const cx = Math.round(e.clientX - rect.left);
+    const cy = Math.round(e.clientY - rect.top);
+    if (cx < 0 || cy < 0 || cx >= mainCanvas.width || cy >= mainCanvas.height) return null;
+    const px = ctx.getImageData(cx, cy, 1, 1).data;
+    return [px[0], px[1], px[2]];
+  }
+
+  // Projdi DOM nahoru a najdi první netransparentní background-color
+  let target = el;
+  while (target && target !== document.documentElement) {
+    const bg = getComputedStyle(target).backgroundColor;
+    const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+    if (m) {
+      const alpha = m[4] !== undefined ? parseFloat(m[4]) : 1;
+      if (alpha > 0.05) return [+m[1], +m[2], +m[3]];
+    }
+    target = target.parentElement;
+  }
+  return null;
+}
+
+// Zobrazí lupu: nad canvasem = přiblížený výsledek, jinde = solid barva + RGB text
+function showPickerMagnifier(e) {
+  const MAG = 160;
+  posMagnifier(e);
+  magCtx.clearRect(0, 0, MAG, MAG);
+  magCtx.imageSmoothingEnabled = false;
+
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+
+  if (el === mainCanvas) {
+    // Zobraz přiblížený pohled na zobrazený canvas (incl. výsledkové kruhy)
+    const HALF = 16;
+    const rect = mainCanvas.getBoundingClientRect();
+    magCtx.drawImage(mainCanvas,
+      e.clientX - rect.left - HALF, e.clientY - rect.top - HALF, HALF * 2, HALF * 2,
+      0, 0, MAG, MAG);
+  } else {
+    const color = getColorUnderCursor(e);
+    const [r, g, b] = color || [30, 41, 59];
+    magCtx.fillStyle = `rgb(${r},${g},${b})`;
+    magCtx.fillRect(0, 0, MAG, MAG);
+    if (color) {
+      // Kontrastní text s barvou a hexem
+      const luma = r * 0.299 + g * 0.587 + b * 0.114;
+      magCtx.fillStyle = luma > 140 ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.95)';
+      magCtx.font = 'bold 12px monospace';
+      magCtx.textAlign = 'center';
+      magCtx.fillText(`rgb(${r}, ${g}, ${b})`, MAG / 2, MAG / 2 - 7);
+      magCtx.font = '11px monospace';
+      magCtx.fillText(`#${[r,g,b].map(v => v.toString(16).padStart(2,'0')).join('')}`, MAG / 2, MAG / 2 + 10);
+    }
+  }
+
+  // Crosshair
+  magCtx.strokeStyle = 'rgba(0,0,0,0.55)';
+  magCtx.lineWidth = 3;
+  magCtx.beginPath();
+  magCtx.moveTo(MAG/2-12, MAG/2); magCtx.lineTo(MAG/2+12, MAG/2);
+  magCtx.moveTo(MAG/2, MAG/2-12); magCtx.lineTo(MAG/2, MAG/2+12);
+  magCtx.stroke();
+  magCtx.strokeStyle = '#fff';
+  magCtx.lineWidth = 1.5;
+  magCtx.stroke();
+}
+
+let pickerHandlers = null;
+
+function activateGlobalPicker(catId, slot) {
+  const cat = state.categories.find(c => c.id === catId);
+  if (!cat) return;
+  if (pickerHandlers) deactivateGlobalPicker();
+
+  state.activePicker = { catId, slot };
+  state.drawingMask = false;
+  $('btn-mask').classList.remove('active');
+  mainCanvas.style.cursor = '';
+  document.documentElement.style.cursor = 'crosshair';
+  renderCategories();
+  setStatus(`Kapátko – klikněte kamkoliv · ESC = zrušit  (kat. "${cat.name}" · ${slot === 'free' ? 'Volné' : 'Obsazené'})`, 'working');
+
+  function onMove(e)    { showPickerMagnifier(e); }
+  function onKeydown(e) { if (e.key === 'Escape') { setStatus('Kapátko zrušeno.', ''); deactivateGlobalPicker(); } }
+  function onClick(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    const color = getColorUnderCursor(e);
+    if (color) {
+      const c = state.categories.find(c => c.id === catId);
+      if (c) {
+        if (slot === 'free') c.freeColor = color;
+        else c.occupiedColor = color;
+        setStatus(`Barva rgb(${color.join(',')}) → "${c.name}" [${slot === 'free' ? 'Volné' : 'Obsazené'}]`, 'ok');
+      }
+    }
+    deactivateGlobalPicker();
+  }
+
+  pickerHandlers = { onMove, onClick, onKeydown };
+  document.addEventListener('mousemove', onMove,    true);
+  document.addEventListener('click',     onClick,   true);
+  document.addEventListener('keydown',   onKeydown, true);
+}
+
+function deactivateGlobalPicker() {
+  if (!pickerHandlers) return;
+  document.removeEventListener('mousemove', pickerHandlers.onMove,    true);
+  document.removeEventListener('click',     pickerHandlers.onClick,   true);
+  document.removeEventListener('keydown',   pickerHandlers.onKeydown, true);
+  pickerHandlers = null;
+  state.activePicker = null;
+  document.documentElement.style.cursor = '';
+  magnifier.style.display = 'none';
+  renderCategories();
 }
 
 // ═══════════════════════════════════════════════
@@ -1263,6 +1458,247 @@ function renderResults(results) {
     resultsGrid.appendChild(card);
   });
 }
+
+// ═══════════════════════════════════════════════
+// SMART SEAT COLOR DETECTION
+// ═══════════════════════════════════════════════
+let detectedSeatColors = [];
+
+// Phase A: fast pixel sampling → candidate colors, excluding background and dust.
+// Quantizes to QUANT-sized buckets, then averages back to true colors.
+function findCandidateColors(maxCandidates) {
+  const W = offCanvas.width, H = offCanvas.height;
+  const imgData = offCtx.getImageData(0, 0, W, H).data;
+  const masks = state.masks;
+  const STEP = 3, QUANT = 18;
+  const buckets = new Map();
+
+  for (let y = 0; y < H; y += STEP) {
+    for (let x = 0; x < W; x += STEP) {
+      let inMask = false;
+      for (const m of masks) {
+        if (x >= m.x && x <= m.x+m.w && y >= m.y && y <= m.y+m.h) { inMask = true; break; }
+      }
+      if (inMask) continue;
+      const i4 = (y * W + x) << 2;
+      const r = imgData[i4], g = imgData[i4+1], b = imgData[i4+2];
+      if (r > 240 && g > 240 && b > 240) continue;
+      if (r < 40  && g < 40  && b < 40)  continue;
+      const qr = Math.round(r / QUANT) * QUANT;
+      const qg = Math.round(g / QUANT) * QUANT;
+      const qb = Math.round(b / QUANT) * QUANT;
+      const key = (qr << 16) | (qg << 8) | qb;
+      const e = buckets.get(key);
+      if (e) { e.count++; e.sumR += r; e.sumG += g; e.sumB += b; }
+      else buckets.set(key, { count: 1, sumR: r, sumG: g, sumB: b });
+    }
+  }
+
+  const total = [...buckets.values()].reduce((s, e) => s + e.count, 0);
+  const sorted = [...buckets.values()]
+    .map(e => ({ color: [Math.round(e.sumR/e.count), Math.round(e.sumG/e.count), Math.round(e.sumB/e.count)], count: e.count }))
+    // Exclude colors that fill >40% of image (likely background/floor)
+    .filter(c => c.count / total < 0.40 && c.count / total > 0.003)
+    .sort((a, b) => b.count - a.count);
+
+  const result = [];
+  for (const c of sorted) {
+    if (!result.some(r => colorDist(c.color, r.color) < 40)) {
+      result.push(c);
+      if (result.length >= maxCandidates) break;
+    }
+  }
+  return result;
+}
+
+// Phase B: run one combined BFS pass for ALL candidate colors simultaneously.
+// Reuses Phase 1+2 logic from runAnalysis so behaviour is consistent.
+// Returns an array of cluster-area arrays, one entry per candidate index.
+function clusterCandidates(candidates, TOL) {
+  const W = offCanvas.width, H = offCanvas.height;
+  const imgData = offCtx.getImageData(0, 0, W, H).data;
+  const masks = state.masks;
+  const colors = candidates.map(c => c.color);
+
+  const tmap = new Uint16Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let inMask = false;
+      for (const m of masks) {
+        if (x >= m.x && x <= m.x+m.w && y >= m.y && y <= m.y+m.h) { inMask = true; break; }
+      }
+      if (inMask) continue;
+      const i4 = (y * W + x) << 2;
+      const r = imgData[i4], g = imgData[i4+1], b = imgData[i4+2];
+      if (r > 253 && g > 253 && b > 253) continue;
+      if (r < 50  && g < 50  && b < 50)  continue;
+      let best = Infinity, bestT = -1;
+      for (let t = 0; t < colors.length; t++) {
+        const d = colorDist([r,g,b], colors[t]);
+        if (d < TOL && d < best) { best = d; bestT = t; }
+      }
+      if (bestT >= 0) tmap[y * W + x] = bestT + 1;
+    }
+  }
+
+  const visited = new Uint8Array(W * H);
+  const byTarget = colors.map(() => []);
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = y * W + x;
+      if (!tmap[idx] || visited[idx]) continue;
+      const tIdx = tmap[idx] - 1;
+      const queue = [idx];
+      visited[idx] = 1;
+      let qi = 0, area = 0;
+      while (qi < queue.length) {
+        const cur = queue[qi++];
+        area++;
+        const cx = cur % W, cy = (cur - cx) / W;
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (!dx && !dy) continue;
+            const nx = cx+dx, ny = cy+dy;
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+            const ni = ny * W + nx;
+            if (!visited[ni] && tmap[ni] === tIdx+1) { visited[ni] = 1; queue.push(ni); }
+          }
+        }
+      }
+      if (area >= 5) byTarget[tIdx].push(area);
+    }
+  }
+  return byTarget;
+}
+
+// Phase C: score a cluster distribution by how "seat-like" it is.
+// High score = many clusters of consistent size (= repeating objects = seats).
+function scoreSeatLikeness(areas) {
+  if (areas.length < 4) return { score: 0, nClusters: 0 };
+
+  const sorted = [...areas].sort((a, b) => a - b);
+  const medArea = sorted[Math.floor(sorted.length / 2)];
+  const filtered = areas.filter(a => a >= medArea * 0.3); // drop fragments (same as Phase 3)
+
+  if (filtered.length < 4) return { score: 0, nClusters: 0 };
+
+  const mean = filtered.reduce((s, a) => s + a, 0) / filtered.length;
+  const stddev = Math.sqrt(filtered.reduce((s, a) => s + (a - mean) ** 2, 0) / filtered.length);
+  const cv = stddev / mean; // coefficient of variation: 0 = perfectly uniform
+
+  // Many clusters AND uniform size = seat-like pattern
+  const score = filtered.length * Math.exp(-cv * 1.5);
+  return { score, nClusters: filtered.length };
+}
+
+function smartDetectSeatColors(maxColors) {
+  const TOL = +tolInput.value;
+
+  const candidates = findCandidateColors(16);
+  if (!candidates.length) return [];
+
+  // Single BFS pass for all candidates → then score each
+  const byTarget = clusterCandidates(candidates, TOL);
+
+  const scored = candidates.map((cand, i) => {
+    const { score, nClusters } = scoreSeatLikeness(byTarget[i]);
+    return { color: cand.color, score, nClusters };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  // Keep top N with positive score, deduplicated
+  const result = [];
+  for (const s of scored) {
+    if (s.score <= 0) break;
+    if (!result.some(r => colorDist(s.color, r.color) < 40)) {
+      result.push(s);
+      if (result.length >= maxColors) break;
+    }
+  }
+  return result;
+}
+
+function renderDetectionPanel(colors) {
+  const palette  = $('det-palette');
+  const hint     = $('det-hint');
+  const applyBtn = $('btn-det-apply');
+
+  $('detection-panel').style.display = 'block';
+  palette.innerHTML = '';
+  detectedSeatColors = colors;
+
+  const totalSeats = colors.reduce((s, c) => s + c.nClusters, 0);
+  hint.textContent = `Rozpoznáno ${colors.length} vzorů · ~${totalSeats} sedadel celkem`;
+
+  colors.forEach(item => {
+    const wrap = document.createElement('div');
+    wrap.className = 'det-swatch-wrap';
+    wrap.title = `rgb(${item.color.join(',')})  –  ~${item.nClusters} sedadel (skóre ${item.score.toFixed(0)})`;
+    wrap.innerHTML = `
+      <div class="det-swatch" style="background:rgb(${item.color.join(',')})"></div>
+      <span class="det-pct">~${item.nClusters}</span>`;
+    palette.appendChild(wrap);
+  });
+
+  applyBtn.style.display = 'flex';
+}
+
+$('btn-detect').addEventListener('click', async () => {
+  if (!state.image) return;
+  setStatus('Hledám vzory sedadel…', 'working');
+  $('btn-detect').disabled = true;
+  $('btn-count').disabled = true;
+  await new Promise(r => setTimeout(r, 30));
+  try {
+    const colors = smartDetectSeatColors(6);
+    if (!colors.length) {
+      setStatus('Nepodařilo se rozpoznat vzory sedadel – zkuste upravit toleranci nebo masky.', '');
+    } else {
+      renderDetectionPanel(colors);
+      setStatus(`Rozpoznáno ${colors.length} vzorů sedadel. Klikněte "Přiřadit do kategorií".`, 'ok');
+    }
+  } catch (err) {
+    setStatus('Chyba detekce: ' + err.message, '');
+    console.error(err);
+  }
+  $('btn-detect').disabled = false;
+  $('btn-count').disabled = !state.image;
+});
+
+$('btn-det-close').addEventListener('click', () => {
+  $('detection-panel').style.display = 'none';
+  detectedSeatColors = [];
+});
+
+// Directly populate categories with detected colors – no manual assignment needed
+$('btn-det-apply').addEventListener('click', () => {
+  if (!detectedSeatColors.length) return;
+
+  // Ensure we have enough categories (add if missing, reuse existing ones)
+  while (state.categories.length < detectedSeatColors.length) {
+    state.categories.push({ id: nextId++, name: `Sedadla ${state.categories.length + 1}`, freeColor: null, occupiedColor: null });
+  }
+
+  // Assign each detected color as freeColor of matching category; clear occupiedColor
+  detectedSeatColors.forEach((d, i) => {
+    state.categories[i].freeColor    = [...d.color];
+    state.categories[i].occupiedColor = null;
+  });
+
+  // Clear colors from any excess categories
+  for (let i = detectedSeatColors.length; i < state.categories.length; i++) {
+    state.categories[i].freeColor = null;
+    state.categories[i].occupiedColor = null;
+  }
+
+  renderCategories();
+  $('detection-panel').style.display = 'none';
+  const total = detectedSeatColors.reduce((s, d) => s + d.nClusters, 0);
+  setStatus(`${detectedSeatColors.length} barev přiřazeno do kategorií (~${total} sedadel). Zkontrolujte a spusťte analýzu.`, 'ok');
+  detectedSeatColors = [];
+});
 
 // ═══════════════════════════════════════════════
 // BEFORE / AFTER SLIDER
